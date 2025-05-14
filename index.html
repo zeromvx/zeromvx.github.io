@@ -122,8 +122,8 @@ ctx.imageSmoothingEnabled = false;
 const BEST_SCORE = "bestScore";
 let bestScore = localStorage.getItem(BEST_SCORE) ?? 0;
 
-const BASE_WIDTH = 288;  
-const BASE_HEIGHT = 512; 
+const BASE_WIDTH = 288;
+const BASE_HEIGHT = 512;
 const dpr = window.devicePixelRatio || 1;
 
 canvas.width = BASE_WIDTH * dpr;
@@ -169,7 +169,7 @@ const jumpSound = new Audio("sounds/fly.mp3");
 const deathSound = new Audio("sounds/die.mp3");
 const backgroundMusic = new Audio("sounds/music.wav");
 
-const bird = { x: 0, y: 240, xspeed: 0, yspeed: 0, xacc: 0, yacc: 400, score: 0 }; 
+const bird = { x: 0, y: 240, xspeed: 0, yspeed: 0, xacc: 0, yacc: 400, score: 0 };
 const bars = [
   { x: 40, uy: -200, ly: 300 },
   { x: 150, uy: -100, ly: 270 },
@@ -189,7 +189,6 @@ addEventListener("keydown", e => {
 });
 addEventListener("keyup", e => delete keysDown[e.keyCode]);
 
-// Поддержка тапа для мобильных устройств
 canvas.addEventListener("touchstart", handleInput);
 canvas.addEventListener("pointerdown", handleInput);
 
@@ -204,16 +203,17 @@ function handleInput() {
     bird.yspeed = -200;
     f = 1;
     jumpSound.play();
-    setTimeout(() => { f = 0; }, 150); // Сброс флага после тапа
+    setTimeout(() => { f = 0; }, 150);
   }
 }
 
 let f = 0;
-const difficulty = -80;
+const baseDifficulty = -80; // Base gap size parameter
+const basePipeSpeed = -60; // Base pipe speed
 
 function reset() {
   bird.x = 0;
-  bird.y = 240; 
+  bird.y = 240;
   bird.xspeed = 0;
   bird.yspeed = 0;
   bird.score = 0;
@@ -228,19 +228,16 @@ function gameOver() {
   deathSound.play();
   isRunning = false;
   waitingToStart = false;
-  
-  if (bird.score > bestScore) { 
+
+  if (bird.score > bestScore) {
     bestScore = bird.score;
     localStorage.setItem(BEST_SCORE, bestScore);
-    
     finalScore.textContent = "Your new best score: " + Math.floor(bestScore);
   } else {
-
     finalScore.textContent = "Score: " + Math.floor(bird.score);
   }
 
   gameOverScreen.style.display = "flex";
-
 }
 
 function update(mod) {
@@ -259,12 +256,17 @@ function update(mod) {
   bird.xspeed += bird.xacc * mod;
   bird.yspeed += bird.yacc * mod;
 
+  // Calculate difficulty scaling based on score
+  const difficultyScale = 1 + bird.score * 0.02; // Increase difficulty by 2% per score point
+  const pipeSpeed = basePipeSpeed * difficultyScale; // Faster pipes
+  const gapSize = baseDifficulty * (1 / difficultyScale); // Smaller gap
+
   bars.forEach(bar => {
-    bar.x += -60 * mod; 
+    bar.x += pipeSpeed * mod;
     if (bar.x < -50) {
       bar.x = BASE_WIDTH;
-      bar.uy = difficulty + 20 - Math.random() * 100;
-      bar.ly = -difficulty + 320 - Math.random() * 100;
+      bar.uy = gapSize + 20 - Math.random() * 100;
+      bar.ly = -gapSize + 320 - Math.random() * 100;
     }
   });
 
@@ -287,9 +289,9 @@ function render() {
   });
 
   ctx.fillStyle = "white";
-  ctx.font = "14px Pixbye Breaks"; 
-  ctx.fillText("score: " + Math.floor(bird.score), 10, 25); 
-  ctx.fillText("best score: " + Math.floor(bestScore), 10, 50); 
+  ctx.font = "14px Pixbye Breaks";
+  ctx.fillText("score: " + Math.floor(bird.score), 10, 25);
+  ctx.fillText("best score: " + Math.floor(bestScore), 10, 50);
 }
 
 function main() {
@@ -316,7 +318,6 @@ function startGame() {
 
 startBtn.onclick = startGame;
 restartBtn.onclick = startGame;
-
   </script>
 </body>
 </html>
