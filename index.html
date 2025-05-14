@@ -13,7 +13,8 @@
 
     * {
       font-family: Pixbye Breaks, monospace !important;
-	  margin: 0;
+      margin: 0;
+      touch-action: manipulation; /* Prevent default touch behaviors like scrolling */
     }
 
     body {
@@ -24,6 +25,7 @@
       justify-content: center;
       align-items: center;
       height: 100dvh;
+      overflow: hidden; /* Prevent scrolling */
     }
 
     canvas {
@@ -31,7 +33,9 @@
       height: calc(min(100dvh, 100vw) * (512 / 288));
       display: block;
       background: #000;
+      image-rendering: pixelated; /* Optimize for pixel art */
     }
+
     #startBtn, #restartBtn {
       margin-top: 10px;
       padding: 10px 20px;
@@ -40,35 +44,41 @@
       cursor: pointer;
       background-color: #00E7DC;
       color: black;
+      touch-action: manipulation;
     }
 
     .irys {
-        color: #00E7DC;
+      color: #00E7DC;
     }
-    
+
     #startBlock, #pressUpMessage {
-        position: absolute;
-        top: 50%;
-        transform: translateY(-50%);
-        display: flex;
-        flex-direction: column;
-        gap: 20px;
+      position: absolute;
+      top: 50%;
+      transform: translateY(-50%);
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+      pointer-events: none; /* Prevent blocking canvas touch events */
+    }
+
+    #startBtn {
+      pointer-events: auto; /* Allow button clicks */
     }
 
     h1, .socials {
-        color: white;
+      color: white;
     }
 
-	.socials {
-		text-align: center;
-		display: flex;
-		flex-direction: column;
-		gap: 4px;
-	}
+    .socials {
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
 
-	.social {
-		color: white;
-	}
+    .social {
+      color: white;
+    }
 
     #gameOverScreen {
       position: absolute;
@@ -79,18 +89,23 @@
       background-color: rgba(0,0,0,0.8);
       color: white;
       padding: 20px;
-	  gap: 20px;
+      gap: 20px;
+      width: 100%;
+      height: 100%;
     }
 
     @keyframes blink {
-        0% { opacity: 1; }
-        50% { opacity: 0.3; }
-        100% { opacity: 1; }
+      0% { opacity: 1; }
+      50% { opacity: 0.3; }
+      100% { opacity: 1; }
     }
 
     #pressUpMessage {
-		user-select: none;
-        animation: blink 1s infinite;
+      user-select: none;
+      animation: blink 1s infinite;
+      color: white;
+      font-size: 20px;
+      margin-top: 10px;
     }
   </style>
 </head>
@@ -98,15 +113,15 @@
   <canvas id="gameCanvas"></canvas>
   <div id="startBlock">
     <h1>FLAPPY <span class="irys">IRYS</span></h1>
-	  <div class="socials">
-		<p>discord: @zeromvx</p>
-		<p>x: <a class="social" target="_blank" href="https://x.com/zeromvx">@zeromvx</a></p>
-	  </div>
-      <button id="startBtn">Start</button>
+    <div class="socials">
+      <p>discord: @zeromvx</p>
+      <p>x: <a class="social" target="_blank" href="https://x.com/zeromvx">@zeromvx</a></p>
+    </div>
+    <button id="startBtn">Start</button>
   </div>
 
-  <div id="pressUpMessage" style="display:none; color:white; font-size:20px; margin-top:10px;">
-      Press ↑ or TOUCH the screen for start
+  <div id="pressUpMessage" style="display:none;">
+    Press ↑ or TOUCH the screen to start
   </div>
 
   <div id="gameOverScreen">
@@ -116,239 +131,274 @@
   </div>
 
   <script>
-const canvas = document.getElementById("gameCanvas");
-const ctx = canvas.getContext("2d");
-ctx.imageSmoothingEnabled = false;
-const BEST_SCORE = "bestScore";
-let bestScore = localStorage.getItem(BEST_SCORE) ?? 0;
+    const canvas = document.getElementById("gameCanvas");
+    const ctx = canvas.getContext("2d", { alpha: false }); // Disable alpha for performance
+    ctx.imageSmoothingEnabled = false;
 
-const BASE_WIDTH = 288;
-const BASE_HEIGHT = 512;
-const dpr = window.devicePixelRatio || 1;
+    const BEST_SCORE = "bestScore";
+    let bestScore = localStorage.getItem(BEST_SCORE) ?? 0;
 
-canvas.width = BASE_WIDTH * dpr;
-canvas.height = BASE_HEIGHT * dpr;
-canvas.style.width = BASE_WIDTH + "px";
-canvas.style.height = BASE_HEIGHT + "px";
-ctx.scale(dpr, dpr);
+    const BASE_WIDTH = 288;
+    const BASE_HEIGHT = 512;
+    const dpr = Math.min(window.devicePixelRatio || 1, 2); // Cap DPR for mobile performance
 
-const startBtn = document.getElementById("startBtn");
-const startBlock = document.getElementById("startBlock");
-const restartBtn = document.getElementById("restartBtn");
-const gameOverScreen = document.getElementById("gameOverScreen");
-const finalScore = document.getElementById("finalScore");
-const pressUpMessage = document.getElementById("pressUpMessage");
+    canvas.width = BASE_WIDTH * dpr;
+    canvas.height = BASE_HEIGHT * dpr;
+    canvas.style.width = BASE_WIDTH + "px";
+    canvas.style.height = BASE_HEIGHT + "px";
+    ctx.scale(dpr, dpr);
 
-let isRunning = false;
-let waitingToStart = false;
-let animationId;
-let then;
+    const startBtn = document.getElementById("startBtn");
+    const startBlock = document.getElementById("startBlock");
+    const restartBtn = document.getElementById("restartBtn");
+    const gameOverScreen = document.getElementById("gameOverScreen");
+    const finalScore = document.getElementById("finalScore");
+    const pressUpMessage = document.getElementById("pressUpMessage");
 
-function scaleCanvas() {
-  const width = window.innerWidth;
-  const height = window.innerHeight;
-  const scale = Math.min(width / BASE_WIDTH, height / BASE_HEIGHT);
-  canvas.style.width = BASE_WIDTH * scale + "px";
-  canvas.style.height = BASE_HEIGHT * scale * (dpr > 1 ? 1 : dpr) + "px";
-}
-window.addEventListener("resize", scaleCanvas);
-scaleCanvas();
+    let isRunning = false;
+    let waitingToStart = false;
+    let animationId;
+    let then;
 
-const loadImage = (src) => {
-  const img = new Image();
-  img.src = src;
-  return img;
-};
+    // Optimize canvas scaling
+    function scaleCanvas() {
+      const width = window.innerWidth;
+      const height = window.innerHeight;
+      const scale = Math.min(width / BASE_WIDTH, height / BASE_HEIGHT);
+      canvas.style.width = BASE_WIDTH * scale + "px";
+      canvas.style.height = BASE_HEIGHT * scale + "px";
+    }
+    window.addEventListener("resize", scaleCanvas);
+    scaleCanvas();
 
-const bgImage = loadImage("images/background.png");
-const birdImage = loadImage("images/bird.png");
-const upperImage = loadImage("images/upper.png");
-const lowerImage = loadImage("images/lower.png");
+    // Preload images and audio
+    const loadImage = (src) => {
+      const img = new Image();
+      img.src = src;
+      return img;
+    };
 
-const jumpSound = new Audio("sounds/fly.mp3");
-const deathSound = new Audio("sounds/die.mp3");
-const scoreSound = new Audio("sounds/scoreUp.mp3");
-const backgroundMusic = new Audio("sounds/music.wav");
+    const assets = {
+      bgImage: loadImage("images/background.png"),
+      birdImage: loadImage("images/bird.png"),
+      upperImage: loadImage("images/upper.png"),
+      lowerImage: loadImage("images/lower.png"),
+      jumpSound: new Audio("sounds/fly.mp3"),
+      deathSound: new Audio("sounds/die.mp3"),
+      scoreSound: new Audio("sounds/scoreUp.mp3"),
+      backgroundMusic: new Audio("sounds/music.wav")
+    };
 
-const bird = { x: 0, y: 240, xspeed: 0, yspeed: 0, xacc: 0, yacc: 400, score: 0 };
-const bars = [
-  { x: 40, uy: -200, ly: 300, passed: false, isMoving: false, ySpeed: 0, baseUy: 0, baseLy: 0, phase: 0 },
-  { x: 150, uy: -100, ly: 270, passed: false, isMoving: false, ySpeed: 0, baseUy: 0, baseLy: 58, phase: 0 },
-  { x: 260, uy: -140, ly: 320, passed: false, isMoving: false, ySpeed: 0, baseUy: 0, baseLy: 0, phase: 0 }
-];
+    // Wait for assets to load before starting
+    let assetsLoaded = 0;
+    const totalAssets = 4; // Number of images
+    function checkAssetsLoaded() {
+      assetsLoaded++;
+      if (assetsLoaded === totalAssets) {
+        startBtn.disabled = false; // Enable start button
+      }
+    }
+    Object.values(assets).slice(0, 4).forEach(img => img.onload = checkAssetsLoaded);
 
-const keysDown = {};
-addEventListener("keydown", e => {
-  keysDown[e.keyCode] = true;
-  if (e.keyCode === 38 && waitingToStart && !isRunning) {
-    isRunning = true;
-    waitingToStart = false;
-    pressUpMessage.style.display = "none";
-    then = Date.now();
-    main();
-  }
-});
-addEventListener("keyup", e => delete keysDown[e.keyCode]);
+    const bird = { x: 0, y: 240, xspeed: 0, yspeed: 0, xacc: 0, yacc: 400, score: 0 };
+    const bars = [
+      { x: 40, uy: -200, ly: 300, passed: false, isMoving: false, ySpeed: 0, baseUy: 0, baseLy: 0, phase: 0 },
+      { x: 150, uy: -100, ly: 270, passed: false, isMoving: false, ySpeed: 0, baseUy: 0, baseLy: 58, phase: 0 },
+      { x: 260, uy: -140, ly: 320, passed: false, isMoving: false, ySpeed: 0, baseUy: 0, baseLy: 0, phase: 0 }
+    ];
 
-canvas.addEventListener("touchstart", handleInput);
-canvas.addEventListener("pointerdown", handleInput);
+    // Input handling
+    const keysDown = {};
+    let lastTouchTime = 0;
+    const touchCooldown = 150; // Debounce touch inputs
 
-function handleInput() {
-  if (waitingToStart && !isRunning) {
-    isRunning = true;
-    waitingToStart = false;
-    pressUpMessage.style.display = "none";
-    then = Date.now();
-    main();
-  } else if (isRunning && !f) {
-    bird.yspeed = -200;
-    f = 1;
-    jumpSound.play();
-    setTimeout(() => { f = 0; }, 150);
-  }
-}
-
-let f = 0;
-const baseDifficulty = -80;
-const basePipeSpeed = -60;
-const maxMoveProbability = 0.8; // Increased to 80% max chance for moving pipes
-const baseYSpeed = 2;
-const moveAmplitude = 20;
-
-function reset() {
-  bird.x = 0;
-  bird.y = 240;
-  bird.xspeed = 0;
-  bird.yspeed = 0;
-  bird.score = 0;
-  bars[0].x = 60;
-  bars[1].x = 150;
-  bars[2].x = 260;
-  bars.forEach(bar => {
-    bar.passed = false;
-    bar.isMoving = false;
-    bar.ySpeed = 0;
-    bar.baseUy = bar.uy;
-    bar.baseLy = bar.ly;
-    bar.phase = 0;
-  });
-}
-
-function gameOver() {
-  backgroundMusic.pause();
-  cancelAnimationFrame(animationId);
-  deathSound.play();
-  isRunning = false;
-  waitingToStart = false;
-
-  if (bird.score > bestScore) {
-    bestScore = bird.score;
-    localStorage.setItem(BEST_SCORE, bestScore);
-    finalScore.textContent = "Your new best score: " + Math.floor(bestScore);
-  } else {
-    finalScore.textContent = "Score: " + Math.floor(bird.score);
-  }
-
-  gameOverScreen.style.display = "flex";
-}
-
-function update(mod) {
-  if (38 in keysDown && !f) {
-    bird.yspeed = -200;
-    f = 1;
-    jumpSound.play();
-  }
-  if (!(38 in keysDown)) {
-    f = 0;
-  }
-
-  bird.x += bird.xspeed * mod;
-  bird.y += bird.yspeed * mod;
-  bird.xspeed += bird.xacc * mod;
-  bird.yspeed += bird.yacc * mod;
-
-  const difficultyScale = 1 + bird.score * 0.02;
-  const pipeSpeed = basePipeSpeed * difficultyScale;
-  const gapSize = baseDifficulty * (1 / difficultyScale);
-  const moveProbability = Math.min(bird.score * 0.02, maxMoveProbability); // Increased to 2% per score point
-
-  bars.forEach(bar => {
-    bar.x += pipeSpeed * mod;
-
-    if (bar.isMoving) {
-      bar.phase += bar.ySpeed * mod;
-      const offset = moveAmplitude * Math.sin(bar.phase);
-      bar.uy = bar.baseUy + offset;
-      bar.ly = bar.baseLy + offset;
+    function handleKeyDown(e) {
+      keysDown[e.keyCode] = true;
+      if (e.keyCode === 38 && waitingToStart && !isRunning) {
+        startGameplay();
+      }
     }
 
-    if (bar.x < -50) {
-      bar.x = BASE_WIDTH;
-      bar.uy = gapSize + 20 - Math.random() * 100;
-      bar.ly = -gapSize + 320 - Math.random() * 100;
-      bar.passed = false;
-      bar.baseUy = bar.uy;
-      bar.baseLy = bar.ly;
-      bar.isMoving = Math.random() < moveProbability;
-      bar.ySpeed = bar.isMoving ? baseYSpeed * difficultyScale : 0;
-      bar.phase = Math.random() * 2 * Math.PI;
+    function handleKeyUp(e) {
+      delete keysDown[e.keyCode];
     }
 
-    if (!bar.passed && bar.x < bird.x) {
-      scoreSound.play();
-      bird.score += 1;
-      bar.passed = true;
+    function handleTouch(e) {
+      e.preventDefault(); // Prevent default touch behaviors
+      const now = Date.now();
+      if (now - lastTouchTime < touchCooldown) return;
+      lastTouchTime = now;
+
+      if (waitingToStart && !isRunning) {
+        startGameplay();
+      } else if (isRunning && !bird.jumping) {
+        bird.yspeed = -200;
+        bird.jumping = true;
+        assets.jumpSound.play();
+        setTimeout(() => { bird.jumping = false; }, 150);
+      }
     }
-  });
 
-  if (bird.y > BASE_HEIGHT || bird.y < 0) gameOver();
+    addEventListener("keydown", handleKeyDown);
+    addEventListener("keyup", handleKeyUp);
+    canvas.addEventListener("touchstart", handleTouch, { passive: false });
+    canvas.addEventListener("pointerdown", handleTouch, { passive: false });
 
-  bars.forEach(bar => {
-    if (bar.x < 30) {
-      if (bird.y < bar.uy + 235 || bird.y > bar.ly - 40) gameOver();
+    const baseDifficulty = -80;
+    const basePipeSpeed = -60;
+    const maxMoveProbability = 0.8;
+    const baseYSpeed = 2;
+    const moveAmplitude = 20;
+
+    function reset() {
+      bird.x = 0;
+      bird.y = 240;
+      bird.xspeed = 0;
+      bird.yspeed = 0;
+      bird.score = 0;
+      bird.jumping = false;
+      bars[0].x = 60;
+      bars[1].x = 150;
+      bars[2].x = 260;
+      bars.forEach(bar => {
+        bar.passed = false;
+        bar.isMoving = false;
+        bar.ySpeed = 0;
+        bar.baseUy = bar.uy;
+        bar.baseLy = bar.ly;
+        bar.phase = 0;
+      });
     }
-  });
-}
 
-function render() {
-  ctx.clearRect(0, 0, BASE_WIDTH, BASE_HEIGHT);
-  if (bgImage.complete) ctx.drawImage(bgImage, 0, 0, BASE_WIDTH, BASE_HEIGHT);
-  if (birdImage.complete) ctx.drawImage(birdImage, bird.x, bird.y);
-  bars.forEach(bar => {
-    if (upperImage.complete) ctx.drawImage(upperImage, bar.x, bar.uy);
-    if (lowerImage.complete) ctx.drawImage(lowerImage, bar.x, bar.ly);
-  });
+    function gameOver() {
+      assets.backgroundMusic.pause();
+      assets.backgroundMusic.currentTime = 0;
+      cancelAnimationFrame(animationId);
+      assets.deathSound.play();
+      isRunning = false;
+      waitingToStart = false;
 
-  ctx.fillStyle = "white";
-  ctx.font = "14px Pixbye Breaks";
-  ctx.fillText("score: " + Math.floor(bird.score), 10, 25);
-  ctx.fillText("best score: " + Math.floor(bestScore), 10, 50);
-}
+      if (bird.score > bestScore) {
+        bestScore = bird.score;
+        localStorage.setItem(BEST_SCORE, bestScore);
+        finalScore.textContent = "Your new best score: " + Math.floor(bestScore);
+      } else {
+        finalScore.textContent = "Score: " + Math.floor(bird.score);
+      }
 
-function main() {
-  if (!isRunning) return;
-  const now = Date.now();
-  const delta = (now - then) / 1000;
-  update(delta);
-  render();
-  then = now;
-  animationId = requestAnimationFrame(main);
-}
+      gameOverScreen.style.display = "flex";
+    }
 
-function startGame() {
-  backgroundMusic.play();
-  isRunning = false;
-  waitingToStart = true;
-  pressUpMessage.style.display = "block";
-  gameOverScreen.style.display = "none";
-  startBtn.style.display = "none";
-  startBlock.style.display = "none";
-  reset();
-  render();
-}
+    function update(mod) {
+      if (38 in keysDown && !bird.jumping) {
+        bird.yspeed = -200;
+        bird.jumping = true;
+        assets.jumpSound.play();
+        setTimeout(() => { bird.jumping = false; }, 150);
+      }
 
-startBtn.onclick = startGame;
-restartBtn.onclick = startGame;
+      bird.x += bird.xspeed * mod;
+      bird.y += bird.yspeed * mod;
+      bird.xspeed += bird.xacc * mod;
+      bird.yspeed += bird.yacc * mod;
+
+      const difficultyScale = 1 + bird.score * 0.02;
+      const pipeSpeed = basePipeSpeed * difficultyScale;
+      const gapSize = baseDifficulty * (1 / difficultyScale);
+      const moveProbability = Math.min(bird.score * 0.02, maxMoveProbability);
+
+      bars.forEach(bar => {
+        bar.x += pipeSpeed * mod;
+
+        if (bar.isMoving) {
+          bar.phase += bar.ySpeed * mod;
+          const offset = moveAmplitude * Math.sin(bar.phase);
+          bar.uy = bar.baseUy + offset;
+          bar.ly = bar.baseLy + offset;
+        }
+
+        if (bar.x < -50) {
+          bar.x = BASE_WIDTH;
+          bar.uy = gapSize + 20 - Math.random() * 100;
+          bar.ly = -gapSize + 320 - Math.random() * 100;
+          bar.passed = false;
+          bar.baseUy = bar.uy;
+          bar.baseLy = bar.ly;
+          bar.isMoving = Math.random() < moveProbability;
+          bar.ySpeed = bar.isMoving ? baseYSpeed * difficultyScale : 0;
+          bar.phase = Math.random() * 2 * Math.PI;
+        }
+
+        if (!bar.passed && bar.x < bird.x) {
+          assets.scoreSound.play();
+          bird.score += 1;
+          bar.passed = true;
+        }
+      });
+
+      if (bird.y > BASE_HEIGHT || bird.y < 0) gameOver();
+
+      bars.forEach(bar => {
+        if (bar.x < 30 && (bird.y < bar.uy + 235 || bird.y > bar.ly - 40)) {
+          gameOver();
+        }
+      });
+    }
+
+    function render() {
+      ctx.drawImage(assets.bgImage, 0, 0, BASE_WIDTH, BASE_HEIGHT);
+      ctx.drawImage(assets.birdImage, bird.x, bird.y);
+      bars.forEach(bar => {
+        ctx.drawImage(assets.upperImage, bar.x, bar.uy);
+        ctx.drawImage(assets.lowerImage, bar.x, bar.ly);
+      });
+
+      ctx.fillStyle = "white";
+      ctx.font = "14px Pixbye Breaks";
+      ctx.fillText("score: " + Math.floor(bird.score), 10, 25);
+      ctx.fillText("best score: " + Math.floor(bestScore), 10, 50);
+    }
+
+    function main() {
+      if (!isRunning) return;
+      const now = Date.now();
+      const delta = Math.min((now - then) / 1000, 0.033); // Cap delta for 30fps
+      update(delta);
+      render();
+      then = now;
+      animationId = requestAnimationFrame(main);
+    }
+
+    function startGameplay() {
+      isRunning = true;
+      waitingToStart = false;
+      pressUpMessage.style.display = "none";
+      then = Date.now();
+      main();
+    }
+
+    function startGame() {
+      if (assetsLoaded < totalAssets) return; // Wait for assets
+      assets.backgroundMusic.loop = true;
+      assets.backgroundMusic.play();
+      isRunning = false;
+      waitingToStart = true;
+      pressUpMessage.style.display = "block";
+      gameOverScreen.style.display = "none";
+      startBtn.style.display = "none";
+      startBlock.style.display = "none";
+      reset();
+      render();
+    }
+
+    startBtn.onclick = startGame;
+    restartBtn.onclick = startGame;
+
+    // Cleanup on page unload
+    window.addEventListener("beforeunload", () => {
+      assets.backgroundMusic.pause();
+      cancelAnimationFrame(animationId);
+    });
   </script>
 </body>
 </html>
