@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Flappy Irys</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"/>
+  <style>
+    @font-face {
+        font-family: "Pixbye Breaks";
+        font-style: normal;
+        font-weight: 400;
+        src: url("./fonts/Pixbye_Breaks.woff") format("woff");
+    }
+
+    * {
+      font-family: Pixbye Breaks, monospace !important;
+    }
+
+    body {
+      margin: 0;
+      background: black;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+    }
+
+    canvas {
+      width: 100vmin;
+      height: calc(100vmin * (512 / 288)); /* Updated aspect ratio */
+      display: block;
+      background: #000;
+    }
+    #startBtn, #restartBtn {
+      margin-top: 10px;
+      padding: 10px 20px;
+      font-size: 18px;
+      border: none;
+      cursor: pointer;
+      background-color: #00E7DC;
+      color: black;
+    }
+
+    .irys {
+        color: #00E7DC;
+    }
+    
+    #startBlock, #pressUpMessage {
+        position: absolute;
+        top: 50%;
+        transform: translateY(-50%);
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+    }
+
+    h1 {
+        color: white;
+    }
+
+    #gameOverScreen {
+      position: absolute;
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background-color: rgba(0,0,0,0.8);
+      color: white;
+      padding: 20px;
+      border-radius: 12px;
+    }
+
+    @keyframes blink {
+        0% { opacity: 1; }
+        50% { opacity: 0.3; }
+        100% { opacity: 1; }
+    }
+
+    #pressUpMessage {
+        animation: blink 1s infinite;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="gameCanvas"></canvas>
+  <div id="startBlock">
+    <h1>FLAPPY <span class="irys">IRYS</span></h1>
+      <button id="startBtn">Start</button>
+  </div>
+
+  <div id="pressUpMessage" style="display:none; color:white; font-size:20px; margin-top:10px;">
+      Press ↑ or TOUCH the screen for start
+  </div>
+
+  <div id="gameOverScreen">
+    <h2>Game over</h2>
+    <p id="finalScore">Score: 0</p>
+    <button id="restartBtn">Play again</button>
+  </div>
+
+  <script>
+const canvas = document.getElementById("gameCanvas");
+const ctx = canvas.getContext("2d");
+ctx.imageSmoothingEnabled = false;
+
+const BASE_WIDTH = 288;  
+const BASE_HEIGHT = 512; 
+const dpr = window.devicePixelRatio || 1;
+
+canvas.width = BASE_WIDTH * dpr;
+canvas.height = BASE_HEIGHT * dpr;
+canvas.style.width = BASE_WIDTH + "px";
+canvas.style.height = BASE_HEIGHT + "px";
+ctx.scale(dpr, dpr);
+
+const startBtn = document.getElementById("startBtn");
+const startBlock = document.getElementById("startBlock");
+const restartBtn = document.getElementById("restartBtn");
+const gameOverScreen = document.getElementById("gameOverScreen");
+const finalScore = document.getElementById("finalScore");
+const pressUpMessage = document.getElementById("pressUpMessage");
+
+let isRunning = false;
+let waitingToStart = false;
+let animationId;
+let then;
+
+function scaleCanvas() {
+  const width = window.innerWidth;
+  const height = window.innerHeight;
+  const scale = Math.min(width / BASE_WIDTH, height / BASE_HEIGHT);
+  canvas.style.width = BASE_WIDTH * scale + "px";
+  canvas.style.height = BASE_HEIGHT * scale * (dpr > 1 ? 1 : dpr) + "px";
+}
+window.addEventListener("resize", scaleCanvas);
+scaleCanvas();
+
+const loadImage = (src) => {
+  const img = new Image();
+  img.src = src;
+  return img;
+};
+
+const bgImage = loadImage("images/background.png");
+const birdImage = loadImage("images/bird.png");
+const upperImage = loadImage("images/upper.png");
+const lowerImage = loadImage("images/lower.png");
+
+const jumpSound = new Audio("sounds/fly.mp3");
+const deathSound = new Audio("sounds/die.mp3");
+const backgroundMusic = new Audio("sounds/music.wav");
+
+const bird = { x: 0, y: 240, xspeed: 0, yspeed: 0, xacc: 0, yacc: 400, score: 0 }; 
+const bars = [
+  { x: 40, uy: -200, ly: 300 },
+  { x: 150, uy: -100, ly: 270 },
+  { x: 260, uy: -140, ly: 320 }
+];
+
+const keysDown = {};
+addEventListener("keydown", e => {
+  keysDown[e.keyCode] = true;
+  if (e.keyCode === 38 && waitingToStart && !isRunning) {
+    isRunning = true;
+    waitingToStart = false;
+    pressUpMessage.style.display = "none";
+    then = Date.now();
+    main();
+  }
+});
+addEventListener("keyup", e => delete keysDown[e.keyCode]);
+
+// Поддержка тапа для мобильных устройств
+canvas.addEventListener("touchstart", handleInput);
+canvas.addEventListener("pointerdown", handleInput);
+
+function handleInput() {
+  if (waitingToStart && !isRunning) {
+    isRunning = true;
+    waitingToStart = false;
+    pressUpMessage.style.display = "none";
+    then = Date.now();
+    main();
+  } else if (isRunning && !f) {
+    bird.yspeed = -200;
+    f = 1;
+    jumpSound.play();
+    setTimeout(() => { f = 0; }, 150); // Сброс флага после тапа
+  }
+}
+
+let f = 0;
+const difficulty = -80;
+
+function reset() {
+  bird.x = 0;
+  bird.y = 240; 
+  bird.xspeed = 0;
+  bird.yspeed = 0;
+  bird.score = 0;
+  bars[0].x = 60;
+  bars[1].x = 150;
+  bars[2].x = 260;
+}
+
+function gameOver() {
+  backgroundMusic.pause();
+  cancelAnimationFrame(animationId);
+  deathSound.play();
+  isRunning = false;
+  waitingToStart = false;
+  finalScore.textContent = "Score: " + Math.floor(bird.score);
+  gameOverScreen.style.display = "flex";
+}
+
+function update(mod) {
+  bird.score += mod;
+  if (38 in keysDown && !f) {
+    bird.yspeed = -200;
+    f = 1;
+    jumpSound.play();
+  }
+  if (!(38 in keysDown)) {
+    f = 0;
+  }
+
+  bird.x += bird.xspeed * mod;
+  bird.y += bird.yspeed * mod;
+  bird.xspeed += bird.xacc * mod;
+  bird.yspeed += bird.yacc * mod;
+
+  bars.forEach(bar => {
+    bar.x += -60 * mod; 
+    if (bar.x < -50) {
+      bar.x = BASE_WIDTH;
+      bar.uy = difficulty + 20 - Math.random() * 100;
+      bar.ly = -difficulty + 320 - Math.random() * 100;
+    }
+  });
+
+  if (bird.y > BASE_HEIGHT || bird.y < 0) gameOver();
+
+  bars.forEach(bar => {
+    if (bar.x < 30) {
+      if (bird.y < bar.uy + 235 || bird.y > bar.ly - 40) gameOver();
+    }
+  });
+}
+
+function render() {
+  ctx.clearRect(0, 0, BASE_WIDTH, BASE_HEIGHT);
+  if (bgImage.complete) ctx.drawImage(bgImage, 0, 0, BASE_WIDTH, BASE_HEIGHT);
+  if (birdImage.complete) ctx.drawImage(birdImage, bird.x, bird.y);
+  bars.forEach(bar => {
+    if (upperImage.complete) ctx.drawImage(upperImage, bar.x, bar.uy);
+    if (lowerImage.complete) ctx.drawImage(lowerImage, bar.x, bar.ly);
+  });
+
+  ctx.fillStyle = "white";
+  ctx.font = "24px Pixbye Breaks"; 
+  ctx.fillText("score: " + Math.floor(bird.score), 10, 50); 
+}
+
+function main() {
+  if (!isRunning) return;
+  const now = Date.now();
+  const delta = (now - then) / 1000;
+  update(delta);
+  render();
+  then = now;
+  animationId = requestAnimationFrame(main);
+}
+
+function startGame() {
+  backgroundMusic.play();
+  isRunning = false;
+  waitingToStart = true;
+  pressUpMessage.style.display = "block";
+  gameOverScreen.style.display = "none";
+  startBtn.style.display = "none";
+  startBlock.style.display = "none";
+  reset();
+  render();
+}
+
+startBtn.onclick = startGame;
+restartBtn.onclick = startGame;
+
+  </script>
+</body>
+</html>
