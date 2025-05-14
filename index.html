@@ -119,6 +119,8 @@
 const canvas = document.getElementById("gameCanvas");
 const ctx = canvas.getContext("2d");
 ctx.imageSmoothingEnabled = false;
+const BEST_SCORE = "bestScore";
+let bestScore = localStorage.getItem(BEST_SCORE) ?? 0;
 
 const BASE_WIDTH = 288;  
 const BASE_HEIGHT = 512; 
@@ -226,8 +228,19 @@ function gameOver() {
   deathSound.play();
   isRunning = false;
   waitingToStart = false;
-  finalScore.textContent = "Score: " + Math.floor(bird.score);
+  
+  if (bird.score > bestScore) { 
+    bestScore = bird.score;
+    localStorage.setItem(BEST_SCORE, bestScore);
+    
+    finalScore.textContent = "Your new best score: " + Math.floor(bestScore);
+  } else {
+
+    finalScore.textContent = "Score: " + Math.floor(bird.score);
+  }
+
   gameOverScreen.style.display = "flex";
+
 }
 
 function update(mod) {
@@ -274,8 +287,9 @@ function render() {
   });
 
   ctx.fillStyle = "white";
-  ctx.font = "24px Pixbye Breaks"; 
-  ctx.fillText("score: " + Math.floor(bird.score), 10, 50); 
+  ctx.font = "14px Pixbye Breaks"; 
+  ctx.fillText("score: " + Math.floor(bird.score), 10, 25); 
+  ctx.fillText("best score: " + Math.floor(bestScore), 10, 50); 
 }
 
 function main() {
