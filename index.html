@@ -13,6 +13,7 @@
 
     * {
       font-family: Pixbye Breaks, monospace !important;
+	  margin: 0;
     }
 
     body {
@@ -54,9 +55,20 @@
         gap: 20px;
     }
 
-    h1 {
+    h1, .socials {
         color: white;
     }
+
+	.socials {
+		text-align: center;
+		display: flex;
+		flex-direction: column;
+		gap: 4px;
+	}
+
+	.social {
+		color: white;
+	}
 
     #gameOverScreen {
       position: absolute;
@@ -67,7 +79,7 @@
       background-color: rgba(0,0,0,0.8);
       color: white;
       padding: 20px;
-      border-radius: 12px;
+	  gap: 20px;
     }
 
     @keyframes blink {
@@ -77,6 +89,7 @@
     }
 
     #pressUpMessage {
+		user-select: none;
         animation: blink 1s infinite;
     }
   </style>
@@ -85,6 +98,10 @@
   <canvas id="gameCanvas"></canvas>
   <div id="startBlock">
     <h1>FLAPPY <span class="irys">IRYS</span></h1>
+	  <div class="socials">
+		<p>discord: @zeromvx</p>
+		<p>x: <a class="social" target="_blank" href="https://x.com/zeromvx">@zeromvx</a></p>
+	  </div>
       <button id="startBtn">Start</button>
   </div>
 
@@ -93,7 +110,7 @@
   </div>
 
   <div id="gameOverScreen">
-    <h2>Game over</h2>
+    <h1>Game over</h1>
     <p id="finalScore">Score: 0</p>
     <button id="restartBtn">Play again</button>
   </div>
