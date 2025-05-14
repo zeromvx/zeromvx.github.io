@@ -28,7 +28,7 @@
 
     canvas {
       width: 100vmin;
-      height: calc(100vmin * (512 / 288)); /* Updated aspect ratio */
+      height: calc(min(100dvh, 100vw) * (512 / 288));
       display: block;
       background: #000;
     }
