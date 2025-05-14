@@ -167,14 +167,14 @@ const lowerImage = loadImage("images/lower.png");
 
 const jumpSound = new Audio("sounds/fly.mp3");
 const deathSound = new Audio("sounds/die.mp3");
-const scoreUpSound = new Audio("sounds/scoreUp.mp3");
+const scoreSound = new Audio("sounds/scoreUp.mp3");
 const backgroundMusic = new Audio("sounds/music.wav");
 
 const bird = { x: 0, y: 240, xspeed: 0, yspeed: 0, xacc: 0, yacc: 400, score: 0 };
 const bars = [
-  { x: 40, uy: -200, ly: 300, passed: false },
-  { x: 150, uy: -100, ly: 270, passed: false },
-  { x: 260, uy: -140, ly: 320, passed: false }
+  { x: 40, uy: -200, ly: 300, passed: false, isMoving: false, ySpeed: 0, baseUy: 0, baseLy: 0, phase: 0 },
+  { x: 150, uy: -100, ly: 270, passed: false, isMoving: false, ySpeed: 0, baseUy: 0, baseLy: 58, phase: 0 },
+  { x: 260, uy: -140, ly: 320, passed: false, isMoving: false, ySpeed: 0, baseUy: 0, baseLy: 0, phase: 0 }
 ];
 
 const keysDown = {};
@@ -211,6 +211,9 @@ function handleInput() {
 let f = 0;
 const baseDifficulty = -80;
 const basePipeSpeed = -60;
+const maxMoveProbability = 0.8; // Increased to 80% max chance for moving pipes
+const baseYSpeed = 2;
+const moveAmplitude = 20;
 
 function reset() {
   bird.x = 0;
@@ -221,7 +224,14 @@ function reset() {
   bars[0].x = 60;
   bars[1].x = 150;
   bars[2].x = 260;
-  bars.forEach(bar => (bar.passed = false)); // Reset passed flags
+  bars.forEach(bar => {
+    bar.passed = false;
+    bar.isMoving = false;
+    bar.ySpeed = 0;
+    bar.baseUy = bar.uy;
+    bar.baseLy = bar.ly;
+    bar.phase = 0;
+  });
 }
 
 function gameOver() {
@@ -243,8 +253,6 @@ function gameOver() {
 }
 
 function update(mod) {
-  // Removed bird.score += mod to stop time-based scoring
-
   if (38 in keysDown && !f) {
     bird.yspeed = -200;
     f = 1;
@@ -262,21 +270,34 @@ function update(mod) {
   const difficultyScale = 1 + bird.score * 0.02;
   const pipeSpeed = basePipeSpeed * difficultyScale;
   const gapSize = baseDifficulty * (1 / difficultyScale);
+  const moveProbability = Math.min(bird.score * 0.02, maxMoveProbability); // Increased to 2% per score point
 
   bars.forEach(bar => {
     bar.x += pipeSpeed * mod;
+
+    if (bar.isMoving) {
+      bar.phase += bar.ySpeed * mod;
+      const offset = moveAmplitude * Math.sin(bar.phase);
+      bar.uy = bar.baseUy + offset;
+      bar.ly = bar.baseLy + offset;
+    }
+
     if (bar.x < -50) {
       bar.x = BASE_WIDTH;
       bar.uy = gapSize + 20 - Math.random() * 100;
       bar.ly = -gapSize + 320 - Math.random() * 100;
-      bar.passed = false; // Reset passed flag when pipe resets
+      bar.passed = false;
+      bar.baseUy = bar.uy;
+      bar.baseLy = bar.ly;
+      bar.isMoving = Math.random() < moveProbability;
+      bar.ySpeed = bar.isMoving ? baseYSpeed * difficultyScale : 0;
+      bar.phase = Math.random() * 2 * Math.PI;
     }
 
-    // Award point when bird passes the pipe
     if (!bar.passed && bar.x < bird.x) {
+      scoreSound.play();
       bird.score += 1;
       bar.passed = true;
-      scoreUpSound.play();
     }
   });
 
