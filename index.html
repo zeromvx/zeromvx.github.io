@@ -14,7 +14,6 @@
     * {
       font-family: Pixbye Breaks, monospace !important;
       margin: 0;
-      touch-action: manipulation; /* Prevent default touch behaviors like scrolling */
     }
 
     body {
@@ -58,7 +57,6 @@
       display: flex;
       flex-direction: column;
       gap: 20px;
-      pointer-events: none; /* Prevent blocking canvas touch events */
     }
 
     #startBtn {
@@ -106,6 +104,7 @@
       color: white;
       font-size: 20px;
       margin-top: 10px;
+      pointer-events: none; /* Prevent blocking canvas touch events */
     }
   </style>
 </head>
